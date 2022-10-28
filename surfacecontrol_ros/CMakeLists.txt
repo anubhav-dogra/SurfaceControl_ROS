@@ -18,8 +18,11 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   pcl_conversions
   cv_bridge
+  sensor_msgs
   image_transport
+  camera_info_manager
 )
+find_package(Boost REQUIRED COMPONENTS thread)
 find_package(OpenCV REQUIRED)
 find_package(MEGCPP 1.6.2 REQUIRED)
 set(LIBM_LIBRARIES m)
@@ -117,7 +120,10 @@ link_libraries(pthread)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES surfacecontrol_ros
-#  CATKIN_DEPENDS roscpp
+   CATKIN_DEPENDS
+    roscpp
+    camera_info_manager
+    image_transport
 #  DEPENDS system_lib
 )
 
@@ -129,7 +135,7 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
 # include
-  ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${Boost_INCLUDE_DIR}
 )
 
 ## Declare a C++ library

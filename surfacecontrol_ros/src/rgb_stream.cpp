@@ -4,6 +4,8 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <camera_info_manager/camera_info_manager.h>
 
 #include <iostream>
 #include <thread>
@@ -18,8 +20,13 @@ using namespace std;
 
 ros::Time time_st;
 
-image_transport::Publisher pub_frame;
-
+//image_transport::Publisher pub_frame_left;
+//image_transport::Publisher pub_frame_right;
+image_transport::CameraPublisher image_pub_left;
+image_transport::CameraPublisher image_pub_right;
+sensor_msgs::CameraInfo cam_info_left;
+sensor_msgs::CameraInfo cam_info_right;
+camera_info_manager::CameraInfoManager *cinfo_;
 
 megc_status_t status;
 GenicamDeviceVec devices;
@@ -27,8 +34,10 @@ SurfaceControlDevicePtr connected_device;
 //const int image_count = 2;
 //meg_image_t camera_images[image_count];
 //SurfaceControlDevice::CameraData image_identifiers[image_count];
-meg_image_t camera_images;
-SurfaceControlDevice::CameraData image_identifiers;
+meg_image_t camera_image_left;
+meg_image_t camera_image_right;
+SurfaceControlDevice::CameraData image_identifier_left;
+SurfaceControlDevice::CameraData image_identifier_right;
 int frame_count = 0;
 mutex mutex_waiting;
 bool data_received = false;
@@ -67,6 +76,7 @@ void connectSurfaceControlDevice()
     {
       connected_device = device->toSurfaceControlDevice();
       cout << "Device connected: Name: \"" << device->modelName() << "\" SN: \"" << device->serialNumber() << "\"\n";
+      cinfo_->setCameraName(device->modelName());
       return;
     }
   }
@@ -89,20 +99,10 @@ void setParameters()
 static
 void imageCallback(const vector<meg_image_t*>& images, const vector<SurfaceControlDevice::CameraData>& identifiers, void* /*user_data*/)
 {
- // also need to change the global variables with this.. !
- /* if (images.size() != image_count)
-  {
-    cerr << "Unexpected image count!\n";
-    return;
-  }
-  for (int i = 0; i < image_count; i++)
-  {
-    camera_images[i] = *(images[i]);
-    image_identifiers[i] = identifiers[i];
-  }*/
-
-  camera_images = *(images[0]); // something is related to vectors and a variable. these are called in this call back as vector ! so who know !!! 
-  image_identifiers = identifiers[0];
+  camera_image_left = *(images[0]);
+  camera_image_right = *(images[1]); // something is related to vectors and a variable. these are called in this call back as vector ! so who know !!! 
+  image_identifier_left = identifiers[0];
+  image_identifier_right = identifiers[1];
   //cout << *(images[0]) << endl;
   //cout << &identifiers<<endl<< identifiers[0]<<endl;
 
@@ -113,9 +113,9 @@ void imageCallback(const vector<meg_image_t*>& images, const vector<SurfaceContr
 void setupDataTransfer()
 {
   cout << "Setup data transfer of camera images\n";
-  /*status = connected_device->setCameraDataEnabled(
-    SurfaceControlDevice::CD_ImageCamera0 | SurfaceControlDevice::CD_ImageCamera1);*/
-    status = connected_device->setCameraDataEnabled(SurfaceControlDevice::CD_ImageCamera0);
+  status = connected_device->setCameraDataEnabled(
+    SurfaceControlDevice::CD_ImageCamera0 | SurfaceControlDevice::CD_ImageCamera1);
+    //status = connected_device->setCameraDataEnabled(SurfaceControlDevice::CD_ImageCamera0);
   if (status != megc_status_t::MEGC_OK)
     return;
 
@@ -129,56 +129,35 @@ void setupDataTransfer()
 
   acquisition_active = true;
 }
-/*void processData()
-{
-  frame_count++;
-  cout << "Processing frame idx " << frame_count << ": ";
-  for (int i = 0; i < image_count; i++)
-  {
-    switch (image_identifiers[i])
-    {
-    case SurfaceControlDevice::CameraData::CD_ImageCamera0: cout << "Camera 1: "; break;
-    case SurfaceControlDevice::CameraData::CD_ImageCamera1: cout << "Camera 2: "; break;
-    default: cerr << "Unexpected measurement type!\n";
-    }
 
-    int x = camera_images[i].width / 2;
-    int y = camera_images[i].height / 2;
-    int w = camera_images[i].width;
-    if ((camera_images[i].type != MEG_PIX_MONO8) && (camera_images[i].type != MEG_PIX_MONO12))
-      cerr << "Unexpected image type!\n";
-    else if (camera_images[i].type == MEG_PIX_MONO12)
-    {
-      meg_image_mono16_t* image_mono_16 = (meg_image_mono16_t*)&(camera_images[i]);
-      cout << "Pixel value (" << x << ", " << y << "): " << (int)(image_mono_16->data[y * w + x]) << "    ";
-    }
-    else
-    {
-      meg_image_mono8_t* image_mono_8 = (meg_image_mono8_t*)&(camera_images[i]);
-      cout << "Pixel value (" << x << ", " << y << "): " << (int)(image_mono_8->data[y * w + x]) << "    ";
-    }
-  }
-
-  cout << "\r";
-}*/
 void processData()
 {
-  //frame_count++;
-  //cout << "Processing frame idx " << frame_count << ": " << endl;
+    cv_bridge::CvImagePtr cv_ptr_left (new cv_bridge::CvImage);
+    cv_bridge::CvImagePtr cv_ptr_right (new cv_bridge::CvImage);
+    ros::Time time = ros::Time::now();ros::Time times = ros::Time::now();
+    cv_ptr_left->encoding = "mono8";
+    cv_ptr_left->header.stamp = time;
+    cv_ptr_left->header.frame_id = "camera_optical_frame_left";
+    cv_ptr_right->encoding = "mono8";
+    cv_ptr_right->header.stamp = times;
+    cv_ptr_right->header.frame_id = "camera_optical_frame_right";
 
-    cv_bridge::CvImagePtr cv_ptr(new cv_bridge::CvImage);
-    ros::Time time = ros::Time::now();
-    cv_ptr->encoding = "mono8";
-    cv_ptr->header.stamp = time;
-    cv_ptr->header.frame_id = "camera_optical_frame_left";
+    cam_info_left.header.frame_id = "camera_optical_frame_left";
+    cam_info_left.header.stamp = time;
+    cam_info_right.header.frame_id = "camera_optical_frame_right";
+    cam_info_right.header.stamp = times;
 
-    int x = camera_images.width / 2;
-    int y = camera_images.height / 2;
-    int w = camera_images.width;
-    int p_size = camera_images.width*camera_images.height;
+    int x_left = camera_image_left.width / 2;
+    int y_left = camera_image_left.height / 2;
+    int w_left = camera_image_left.width;
+    int x_right = camera_image_right.width / 2;
+    int y_right = camera_image_right.height / 2;
+    int w_right = camera_image_right.width;
+    int p_size_left = camera_image_left.width*camera_image_left.height;
+    int p_size_right = camera_image_right.width*camera_image_right.height;
     //cout<< p_size<< endl;
     //cout<< camera_images.type<<endl;
-    if ((camera_images.type != MEG_PIX_MONO8) && (camera_images.type != MEG_PIX_MONO12))
+    /*if ((camera_images.type != MEG_PIX_MONO8) && (camera_images.type != MEG_PIX_MONO12))
       cerr << "Unexpected image type!\n";
     else if (camera_images.type == MEG_PIX_MONO12)
     {
@@ -186,21 +165,32 @@ void processData()
       cout << "Pixel value image_mono_16(" << x << ", " << y << "): " << (int)(image_mono_16->data[y * w + x]) << "    "<< endl;
     }
     else
-    {
-      meg_image_mono8_t* image_mono_8 = (meg_image_mono8_t*)&(camera_images);
+    {*/
+      meg_image_mono8_t* image_mono_8_left = (meg_image_mono8_t*)&(camera_image_left);
+      meg_image_mono8_t* image_mono_8_right = (meg_image_mono8_t*)&(camera_image_right);
       //cout<< image_mono_8->type<<endl;
       //cout << "Pixel value image_mono_8(" << x << ", " << y << "): " << (int)(image_mono_8->data[y * w + x]) << "    "<< endl;
-
-      cv::Mat img_out = cv::Mat(image_mono_8->height, image_mono_8->width, CV_8UC1, image_mono_8->data);
+      cv::Mat img_out_left = cv::Mat(image_mono_8_left->height, image_mono_8_left->width, CV_8UC1, image_mono_8_left->data);
+      cv::Mat img_out_right = cv::Mat(image_mono_8_right->height, image_mono_8_right->width, CV_8UC1, image_mono_8_right->data);
 
       
-      cv_ptr->image = img_out;
-      sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "CV_8UC1", img_out).toImageMsg();
-      pub_frame.publish(cv_ptr->toImageMsg());
+      cv_ptr_left->image = img_out_left;
+      cv_ptr_right->image = img_out_right;
+      sensor_msgs::ImagePtr msg_left = cv_bridge::CvImage(std_msgs::Header(), "mono8", img_out_left).toImageMsg();
+      sensor_msgs::ImagePtr msg_right = cv_bridge::CvImage(std_msgs::Header(), "mono8", img_out_right).toImageMsg();
+      cam_info_left.height = msg_left->height;
+      cam_info_left.width = msg_left->width;
+      cam_info_right.height = msg_right->height;
+      cam_info_right.width =  msg_right->width;
+
+      //pub_frame_left.publish(cv_ptr_left->toImageMsg());
+      //pub_frame_right.publish(cv_ptr_right->toImageMsg());
+      image_pub_left.publish(*msg_left,cam_info_left);
+      image_pub_right.publish(*msg_right,cam_info_right);
       //cout<< img_out << endl;
       //cv::imshow("Display window", img_out);
 
-    }
+    //}
 
   }
 
@@ -230,10 +220,14 @@ int main(int argc, char **argv)
   spinner.start();
   ROS_INFO("Namaskaar!  RGB coming up");
   image_transport::ImageTransport it_(nh);
-  pub_frame = it_.advertise("camera/image", 1);
+  cinfo_ = new camera_info_manager::CameraInfoManager(nh);
+  image_pub_left = it_.advertiseCamera("/camera/left/image_raw", 1);
+  image_pub_right = it_.advertiseCamera("/camera/right/image_raw", 1);
+
+  //pub_frame_left = it_.advertise("camera/left/image_raw", 1);
+  //pub_frame_right = it_.advertise("camera/right/image_raw", 1);
   
-  
-  //pub = nh.advertise<> > ("camera/color/image",10);
+
   status = GenicamSystem::initialize();
 
   if (status != megc_status_t::MEGC_OK)
@@ -266,9 +260,7 @@ int main(int argc, char **argv)
 
   if (connected_device != nullptr)
     connected_device->disconnect();
-
   
-
 
   ros::waitForShutdown();
 
