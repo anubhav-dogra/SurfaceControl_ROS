@@ -124,8 +124,6 @@ static
 void pointCloudCallback(PointCloudTypePtr data, void* /*user_data*/)
 {
   point_cloud = data;
-  
-
   //We signal the measurement loop that data has been received
   data_received = true;
   event_condition.notify_all();
@@ -133,10 +131,9 @@ void pointCloudCallback(PointCloudTypePtr data, void* /*user_data*/)
 
 void processData()
 {
-    
     pcl::PointCloud<pcl::PointXYZ> point_cloud_data;
     pcl::PointXYZ points_of_pcl;
-    point_cloud_data.header.frame_id = "camera_frame_raw";
+    point_cloud_data.header.frame_id = "camera_frame_depth";
     time_st = ros::Time::now ();
     point_cloud_data.header.stamp = time_st.toNSec()/1e3;
     const PointCloudType::Points& points_data = point_cloud->points();
@@ -161,14 +158,54 @@ void processData()
         
 
     }
+    int valid_point = 0;
+    float min_x = 0.0, max_x = 0.0, min_y = 0.0, max_y = 0.0, min_z = 0.0, max_z = 0.0;
+    for (const PointXYZ<float>& point : points_data)
+    {
+      if (PointCloudType::isValid(point))
+        valid_point++;
+      else
+        continue;
+
+      if (valid_points == 1)
+      {
+        //Initialize values
+        min_x = point.x;
+        max_x = min_x;
+        min_y = point.y;
+        max_y = min_y;
+        min_z = point.z;
+        max_z = min_z;
+      }
+      else if (PointCloudType::isValid(point))
+      {
+        if (point.x < min_x)
+          min_x = point.x;
+        if (point.x > max_x)
+          max_x = point.x;
+        if (point.y < min_y)
+          min_y = point.y;
+        if (point.y > max_y)
+          max_y = point.y;
+        if (point.z < min_z)
+          min_z = point.z;
+        if (point.z > max_z)
+          max_z = point.z;
+      }
+    //cout << point.x << endl;
+    }
+    cout << "3D data info: Valid points: " << valid_points << " | Min x: " << min_x << " | Max x: " << max_x << " | Min y: "
+    << min_y << " | Max y: " << max_y << " | Min z: " << min_z << " | Max z: " << max_z << "\n";
+
+  
     point_cloud_data.width = point_cloud_data.size();
     point_cloud_data.height = 1;
-    cout<< point_cloud_data.size() << endl;
+    //cout<< point_cloud_data.size() << endl;
     //pub.publish(point_cloud_data.makeShared());
     pub.publish(point_cloud_data);
     //
     // point_cloud_data->points[valid_points].x = points[valid_points].x; 
-    cout << point_cloud_data << endl;
+    //cout << point_cloud_data << endl;
 }
 void setupDataTransfer()
 {

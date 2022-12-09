@@ -1,0 +1,48 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/opt/ros/noetic/include/",
+                "/home/terabotics/epsilon_ws/**",
+                "/usr/include/eigen3",
+                "/usr/include/pcl-1.10",
+                "/usr/include/pcl-1.10/pcl",
+                "/usr/include/pcl-1.10/pcl/2d",
+                "/usr/include/pcl-1.10/pcl/apps",
+                "/usr/include/pcl-1.10/pcl/common",
+                "/usr/include/pcl-1.10/pcl/compression",
+                "/usr/include/pcl-1.10/pcl/console",
+                "/usr/include/pcl-1.10/pcl/features",
+                "/usr/include/pcl-1.10/pcl/filters",
+                "/usr/include/pcl-1.10/pcl/geometry",
+                "/usr/include/pcl-1.10/pcl/impl",
+                "/usr/include/pcl-1.10/pcl/in_hand_scanner",
+                "/usr/include/pcl-1.10/pcl/io",
+                "/usr/include/pcl-1.10/pcl/kdtree",
+                "/usr/include/pcl-1.10/pcl/keypoints",
+                "/usr/include/pcl-1.10/pcl/ml",
+                "/usr/include/pcl-1.10/pcl/octree",
+                "/usr/include/pcl-1.10/pcl/outofcore",
+                "/usr/include/pcl-1.10/pcl/people",
+                "/usr/include/pcl-1.10/pcl/range_image",
+                "/usr/include/pcl-1.10/pcl/recognition",
+                "/usr/include/pcl-1.10/pcl/registration",
+                "/usr/include/pcl-1.10/pcl/sample_consensus",
+                "/usr/include/pcl-1.10/pcl/search",
+                "/usr/include/pcl-1.10/pcl/segmentation",
+                "/usr/include/pcl-1.10/pcl/stereo",
+                "/usr/include/pcl-1.10/pcl/surface",
+                "/usr/include/pcl-1.10/pcl/tracking",
+                "/usr/include/pcl-1.10/pcl/visualization"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

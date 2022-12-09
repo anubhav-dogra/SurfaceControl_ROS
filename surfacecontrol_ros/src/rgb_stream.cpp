@@ -26,7 +26,8 @@ image_transport::CameraPublisher image_pub_left;
 image_transport::CameraPublisher image_pub_right;
 sensor_msgs::CameraInfo cam_info_left;
 sensor_msgs::CameraInfo cam_info_right;
-camera_info_manager::CameraInfoManager *cinfo_;
+camera_info_manager::CameraInfoManager *cinfo_left;
+camera_info_manager::CameraInfoManager *cinfo_right;
 
 megc_status_t status;
 GenicamDeviceVec devices;
@@ -36,6 +37,7 @@ SurfaceControlDevicePtr connected_device;
 //SurfaceControlDevice::CameraData image_identifiers[image_count];
 meg_image_t camera_image_left;
 meg_image_t camera_image_right;
+
 SurfaceControlDevice::CameraData image_identifier_left;
 SurfaceControlDevice::CameraData image_identifier_right;
 int frame_count = 0;
@@ -76,7 +78,7 @@ void connectSurfaceControlDevice()
     {
       connected_device = device->toSurfaceControlDevice();
       cout << "Device connected: Name: \"" << device->modelName() << "\" SN: \"" << device->serialNumber() << "\"\n";
-      cinfo_->setCameraName(device->modelName());
+      //cinfo_->setCameraName(device->modelName());
       return;
     }
   }
@@ -132,21 +134,21 @@ void setupDataTransfer()
 
 void processData()
 {
-    cv_bridge::CvImagePtr cv_ptr_left (new cv_bridge::CvImage);
+    /*cv_bridge::CvImagePtr cv_ptr_left (new cv_bridge::CvImage);
     cv_bridge::CvImagePtr cv_ptr_right (new cv_bridge::CvImage);
-    ros::Time time = ros::Time::now();ros::Time times = ros::Time::now();
     cv_ptr_left->encoding = "mono8";
     cv_ptr_left->header.stamp = time;
     cv_ptr_left->header.frame_id = "camera_optical_frame_left";
     cv_ptr_right->encoding = "mono8";
     cv_ptr_right->header.stamp = times;
-    cv_ptr_right->header.frame_id = "camera_optical_frame_right";
-
+    cv_ptr_right->header.frame_id = "camera_optical_frame_right";*/
+    ros::Time time = ros::Time::now();ros::Time times = ros::Time::now();
+    cam_info_left  = cinfo_left->getCameraInfo();
+    cam_info_right =  cinfo_right->getCameraInfo();
     cam_info_left.header.frame_id = "camera_optical_frame_left";
     cam_info_left.header.stamp = time;
     cam_info_right.header.frame_id = "camera_optical_frame_right";
     cam_info_right.header.stamp = times;
-
     int x_left = camera_image_left.width / 2;
     int y_left = camera_image_left.height / 2;
     int w_left = camera_image_left.width;
@@ -168,25 +170,38 @@ void processData()
     {*/
       meg_image_mono8_t* image_mono_8_left = (meg_image_mono8_t*)&(camera_image_left);
       meg_image_mono8_t* image_mono_8_right = (meg_image_mono8_t*)&(camera_image_right);
-      //cout<< image_mono_8->type<<endl;
+      //meg_image_rgb8_t* image_rbg_8_left = (meg_image_rgb8_t*)&(camera_image_left);
+     // meg_image_rgb8_t* image_rbg_8_right = (meg_image_rgb8_t*)&(camera_image_right);
+
       //cout << "Pixel value image_mono_8(" << x << ", " << y << "): " << (int)(image_mono_8->data[y * w + x]) << "    "<< endl;
       cv::Mat img_out_left = cv::Mat(image_mono_8_left->height, image_mono_8_left->width, CV_8UC1, image_mono_8_left->data);
       cv::Mat img_out_right = cv::Mat(image_mono_8_right->height, image_mono_8_right->width, CV_8UC1, image_mono_8_right->data);
+      //cv::Mat img_out_left = cv::Mat(image_rbg_8_left->height, image_rbg_8_left->width, CV_8UC3, image_rbg_8_left->data);
+      //cv::Mat img_out_right = cv::Mat(image_rbg_8_right->height, image_rbg_8_right->width, CV_8UC3, image_rbg_8_right->data);
 
-      
-      cv_ptr_left->image = img_out_left;
-      cv_ptr_right->image = img_out_right;
+      //std::cout<< "Im here "<< std::endl;
+      /*cv_ptr_left->image = img_out_left;
+      cv_ptr_right->image = img_out_right;*/
       sensor_msgs::ImagePtr msg_left = cv_bridge::CvImage(std_msgs::Header(), "mono8", img_out_left).toImageMsg();
       sensor_msgs::ImagePtr msg_right = cv_bridge::CvImage(std_msgs::Header(), "mono8", img_out_right).toImageMsg();
-      cam_info_left.height = msg_left->height;
+      //sensor_msgs::ImagePtr msg_left = cv_bridge::CvImage(std_msgs::Header(), "rgb8", img_out_left).toImageMsg();
+      //sensor_msgs::ImagePtr msg_right = cv_bridge::CvImage(std_msgs::Header(), "rgb8", img_out_right).toImageMsg();
+      //std::cout<< "Im here too "<< std::endl;
+      msg_left->header.stamp = time;
+      msg_left->header.frame_id = "camera_optical_frame_left";
+      msg_right->header.stamp = times;
+      msg_right->header.frame_id = "camera_optical_frame_right";
+      /*cam_info_left.height = msg_left->height;
       cam_info_left.width = msg_left->width;
       cam_info_right.height = msg_right->height;
-      cam_info_right.width =  msg_right->width;
+      cam_info_right.width =  msg_right->width;*/
 
       //pub_frame_left.publish(cv_ptr_left->toImageMsg());
       //pub_frame_right.publish(cv_ptr_right->toImageMsg());
       image_pub_left.publish(*msg_left,cam_info_left);
       image_pub_right.publish(*msg_right,cam_info_right);
+      
+
       //cout<< img_out << endl;
       //cv::imshow("Display window", img_out);
 
@@ -216,11 +231,23 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "surfacecontrol_ros_rgb2D");
   ros::NodeHandle nh;
+  ros::NodeHandle nh_left(nh, "left_camera");
+  ros::NodeHandle nh_right(nh, "right_camera");
   ros::AsyncSpinner spinner(4);
   spinner.start();
   ROS_INFO("Namaskaar!  RGB coming up");
   image_transport::ImageTransport it_(nh);
-  cinfo_ = new camera_info_manager::CameraInfoManager(nh);
+  const string camurl_left = "file:///home/terabotics/.ros/camera_info/camera_left.yaml";
+  const string camurl_right = "file:///home/terabotics/.ros/camera_info/camera_right.yaml";
+  //const string camurl_left = "file:///home/terabotics/SurfaceControl_ws/src/surfacecontrol_ros/config/calibrationdata_nov_9_2nd/left.yaml";
+  //const string camurl_right = "file:///home/terabotics/SurfaceControl_ws/src/surfacecontrol_ros/config/calibrationdata_nov_9_2nd/right.yaml";
+  cinfo_left = new camera_info_manager::CameraInfoManager(nh_left, "camera_left", camurl_left);
+  cinfo_right = new camera_info_manager::CameraInfoManager(nh_right,"camera_right", camurl_right);
+  //cinfo_left->setCameraName("camera_left");
+  //cinfo_right->setCameraName("camera_right");
+  //cam_info_left  = cinfo_left->getCameraInfo();
+  //cam_info_right =  cinfo_right->getCameraInfo();
+
   image_pub_left = it_.advertiseCamera("/camera/left/image_raw", 1);
   image_pub_right = it_.advertiseCamera("/camera/right/image_raw", 1);
 
